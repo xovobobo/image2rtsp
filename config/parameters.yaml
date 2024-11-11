@@ -2,18 +2,19 @@
    ros__parameters:
 
       # If camera serves as a source
-      camera: False      
+      camera: False
       source: "v4l2src device=/dev/video0"
 
       # If the source is a ros2 topic (default case)
-      topic: "/color/image_raw"
+      compressed_image: True
+      topic: "/drone/image_raw/compressed"
 
       # General setup
-      mountpoint: "/back"
+      mountpoint: "/test"
       bitrate: "500"
-      framerate: "30"
+      framerate: "10"
       caps_1: "video/x-raw, framerate ="
-      caps_2: "/1,width=640,height=480"
+      caps_2: "/1, width=1280,height=720"
       port: "8554"
       local_only: True     # True = rtsp://127.0.0.1:portAndMountpoint (The stream is accessible only from the local machine)
                            # False = rtsp://0.0.0.0:portAndMountpoint (The stream is accessible from the outside) 

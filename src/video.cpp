@@ -116,7 +116,6 @@ GstCaps *Image2rtsp::gst_caps_new_from_image(const sensor_msgs::msg::Image::Shar
         {sensor_msgs::image_encodings::MONO16, "GRAY16_LE"},
         {sensor_msgs::image_encodings::YUV422, "YUY2"},
     };
-
     if (msg->is_bigendian){
         RCLCPP_ERROR(this->get_logger(), "GST: big endian image format is not supported");
         return nullptr;
@@ -132,6 +131,20 @@ GstCaps *Image2rtsp::gst_caps_new_from_image(const sensor_msgs::msg::Image::Shar
                                "format", G_TYPE_STRING, format->second.c_str(),
                                "width", G_TYPE_INT, msg->width,
                                "height", G_TYPE_INT, msg->height,
+                               "framerate", GST_TYPE_FRACTION, stoi(framerate), 1,
+                               nullptr);
+}
+
+GstCaps *Image2rtsp::gst_caps_new_from_compressed_image(const sensor_msgs::msg::CompressedImage::SharedPtr &msg){
+    if (msg->format != "jpeg"){
+        RCLCPP_ERROR(this->get_logger(), "GST: image format '%s' not supported", msg->format.c_str());
+        return nullptr;
+    }
+
+    return gst_caps_new_simple("image/jpeg",
+                               "format", G_TYPE_STRING, "BGR",
+                                "width", G_TYPE_INT, 0,
+                                "height", G_TYPE_INT, 0,
                                "framerate", GST_TYPE_FRACTION, stoi(framerate), 1,
                                nullptr);
 }
@@ -161,6 +174,24 @@ void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
     if (appsrc != NULL){
         // Set caps from message
         caps = gst_caps_new_from_image(msg);
+        gst_app_src_set_caps(appsrc, caps);
+        buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
+        gst_buffer_fill(buf, 0, msg->data.data(), msg->data.size());
+        GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_LIVE);
+        gst_app_src_push_buffer(appsrc, buf);
+    }
+}
+
+void Image2rtsp::topic_compressed_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg){
+    GstBuffer *buf;
+    GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
+    RCLCPP_INFO(this->get_logger(), "topic_cb");
+    char *gst_type, *gst_format = (char *)"";
+    if (appsrc != NULL){
+        // Set caps from message
+        caps = gst_caps_new_from_compressed_image(msg);
+        if (caps == nullptr)
+            return;
         gst_app_src_set_caps(appsrc, caps);
         buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
         gst_buffer_fill(buf, 0, msg->data.data(), msg->data.size());
