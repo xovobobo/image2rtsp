@@ -20,3 +20,6 @@
                            # False = rtsp://0.0.0.0:portAndMountpoint (The stream is accessible from the outside) 
                            # For example, to access the stream running on the machine with IP = 192.168.20.20,
                            # use rtsp://192.186.20.20:portAndMountpoint
+
+      override_pipeline: False
+      custom_pipeline: "( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true ! jpegdec ! videoconvert ! videoscale ! video/x-raw, framerate =10/1, width=1280,height=720 ! x264enc tune=zerolatency bitrate=500key-int-max=30 ! video/x-h264, profile=baseline ! rtph264pay name=pay0 pt=96 )"
