@@ -1,5 +1,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
 #include <gst/gst.h>
 #include <gst/rtsp-server/rtsp-server.h>
 #include <gst/app/gstappsrc.h>
@@ -11,6 +12,7 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     // Declare and get the parameters
     this->declare_parameter("source", "v4l2src device=/dev/video0");
     this->declare_parameter("topic", "/color/image_raw");
+    this->declare_parameter("compressed_image", false);
     this->declare_parameter("mountpoint", "/back");
     this->declare_parameter("bitrate", "500");
     this->declare_parameter("framerate", "30");
@@ -22,6 +24,7 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
 
     source = this->get_parameter("source").as_string();
     topic = this->get_parameter("topic").as_string();
+    compressed_image = this->get_parameter("compressed_image").as_bool();
     mountpoint = this->get_parameter("mountpoint").as_string();
     bitrate = this->get_parameter("bitrate").as_string();
     framerate = this->get_parameter("framerate").as_string();
@@ -32,24 +35,41 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     camera = this->get_parameter("camera").as_bool();
 
     // Start the subscription
-    subscription_ = this->create_subscription<sensor_msgs::msg::Image>(topic, 10, std::bind(&Image2rtsp::topic_callback, this, _1));
+    if (!camera)
+    {
+        if (compressed_image)
+        {
+            subscription_compressed_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(topic, 1, std::bind(&Image2rtsp::topic_compressed_callback, this, _1));
+        }
+        else
+        {
+            subscription_ = this->create_subscription<sensor_msgs::msg::Image>(topic, 1, std::bind(&Image2rtsp::topic_callback, this, _1));
+        }
 
-    // Start the RTSP server
+    }
+
     video_mainloop_start();
     rtsp_server = rtsp_server_create(port, local_only);
     appsrc = NULL;
+
     // Setup the pipeline
     pipeline_tail = "key-int-max=30 ! video/x-h264, profile=baseline ! rtph264pay name=pay0 pt=96 )";
-    if (camera == false){
-        pipeline_head = "( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true ! videoconvert ! videoscale ! ";
-        pipeline = pipeline_head + caps_1 + framerate + caps_2 + " ! x264enc tune=zerolatency bitrate=" + bitrate + pipeline_tail;
-        rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), (GstElement **)&(appsrc));
+    std::string pipeline_head, pipeline;
+
+    if (camera) {
+        pipeline_head = "( " + source;
+    } else {
+        pipeline_head = "( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true";
+        pipeline_head += compressed_image ? " ! jpegdec" : "";
     }
-    else {
-        pipeline = "( " + source + " ! videoconvert ! videoscale ! " + caps_1 + framerate + caps_2 + " ! x264enc tune=zerolatency bitrate=" + bitrate + pipeline_tail;
-        rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), NULL);
-    }
+
+    pipeline = pipeline_head + " ! videoconvert ! videoscale ! " + caps_1 + framerate + caps_2 +
+            " ! x264enc tune=zerolatency bitrate=" + bitrate + pipeline_tail;
+    rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? NULL : (GstElement **)&(appsrc));
+
+
     RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
+    RCLCPP_INFO(this->get_logger(), "Pipeline: %s", pipeline.c_str());
 }
 
 int main(int argc, char *argv[]){

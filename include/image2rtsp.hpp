@@ -6,6 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
 
 using namespace std;
 
@@ -17,6 +18,7 @@ public:
 private:
     string source;
     string topic;
+    bool compressed_image;
     string mountpoint;
     string bitrate;
     string framerate;
@@ -33,9 +35,12 @@ private:
     void video_mainloop_start();
     void rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc);
     void topic_callback(const sensor_msgs::msg::Image::SharedPtr msg);
+    void topic_compressed_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
     GstRTSPServer *rtsp_server_create(const string &port, const bool local_only);
     GstCaps *gst_caps_new_from_image(const sensor_msgs::msg::Image::SharedPtr &msg);
+    GstCaps *gst_caps_new_from_compressed_image(const sensor_msgs::msg::CompressedImage::SharedPtr &msg);
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
+    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_compressed_;
 };
 
 static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, GstElement **appsrc);
