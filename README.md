@@ -59,6 +59,13 @@ sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1
                                # False = rtsp://0.0.0.0:portAndMountpoint (The stream is accessible from the outside) 
                                # For example, to access the stream running on the machine with IP = 192.168.20.20,
                                # use rtsp://192.186.20.20:portAndMountpoint
+
+    override_pipeline: False   # Determines whether a custom GStreamer pipeline is used for the RTSP stream.
+                               # False = The default GStreamer pipeline will be generated based on the configuration settings provided above
+                               # True = The pipeline defined in `custom_pipeline` will be used
+
+    custom_pipeline: "( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true ! jpegdec ! videoconvert ! videoscale ! video/x-raw, framerate =10/1, width=1280,height=720 ! x264enc tune=zerolatency bitrate=500key-int-max=30 ! video/x-h264, profile=baseline ! rtph264pay name=pay0 pt=96 )"
+
   - Save your configuration and navigate to `ros2_ws` colcon root, source and build the package:
       ```bashrc
       cd ~/ros2_ws/

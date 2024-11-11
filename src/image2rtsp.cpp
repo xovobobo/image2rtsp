@@ -21,6 +21,8 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     this->declare_parameter("port", "8554");
     this->declare_parameter("local_only", true);
     this->declare_parameter("camera", false);
+    this->declare_parameter("override_pipeline", false);
+    this->declare_parameter("custom_pipeline", "");
 
     source = this->get_parameter("source").as_string();
     topic = this->get_parameter("topic").as_string();
@@ -33,6 +35,8 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     port = this->get_parameter("port").as_string();
     local_only = this->get_parameter("local_only").as_bool();
     camera = this->get_parameter("camera").as_bool();
+    override_pipeline = this->get_parameter("override_pipeline").as_bool();
+    custom_pipeline = this->get_parameter("custom_pipeline").as_string();
 
     // Start the subscription
     if (!camera)
@@ -56,17 +60,24 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     pipeline_tail = "key-int-max=30 ! video/x-h264, profile=baseline ! rtph264pay name=pay0 pt=96 )";
     std::string pipeline_head, pipeline;
 
-    if (camera) {
-        pipeline_head = "( " + source;
-    } else {
-        pipeline_head = "( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true";
-        pipeline_head += compressed_image ? " ! jpegdec" : "";
+    if (!override_pipeline)
+    {
+        if (camera) {
+            pipeline_head = "( " + source;
+        } else {
+            pipeline_head = "( appsrc name=imagesrc do-timestamp=true min-latency=0 max-latency=0 max-bytes=1000 is-live=true";
+            pipeline_head += compressed_image ? " ! jpegdec" : "";
+        }
+
+        pipeline = pipeline_head + " ! videoconvert ! videoscale ! " + caps_1 + framerate + caps_2 +
+                " ! x264enc tune=zerolatency bitrate=" + bitrate + " " + pipeline_tail;
+    }
+    else
+    {
+        pipeline = custom_pipeline;
     }
 
-    pipeline = pipeline_head + " ! videoconvert ! videoscale ! " + caps_1 + framerate + caps_2 +
-            " ! x264enc tune=zerolatency bitrate=" + bitrate + pipeline_tail;
     rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? NULL : (GstElement **)&(appsrc));
-
 
     RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
     RCLCPP_INFO(this->get_logger(), "Pipeline: %s", pipeline.c_str());

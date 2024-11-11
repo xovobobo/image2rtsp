@@ -28,8 +28,10 @@ private:
     string pipeline;
     string pipeline_head;
     string pipeline_tail;
+    string custom_pipeline;
     bool local_only;
     bool camera;
+    bool override_pipeline;
     GstAppSrc *appsrc;
 
     void video_mainloop_start();
