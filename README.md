@@ -41,7 +41,8 @@ sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1
     # If camera serves as a source (switched off by default)
     camera: False      
     source: "v4l2src device=/dev/video0"
-    
+
+    compressed_image: False    # Set to False if the message type is sensor_msgs.msg.Image; if the message type is sensor_msgs.msg.CompressedImage, set to True
     topic: "/color/image_raw"  # The ROS2 topic to subscribe to. Dont change, if you use a camera
 
     # Parameters for both cases
