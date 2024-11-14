@@ -91,4 +91,4 @@ source install/setup.bash
 ros2 launch image2rtsp rtsp.launch.py 
 ```
 ## To Do
-- Add compressed images formats (jpeg, png)
+- Add compressed images formats (png)
