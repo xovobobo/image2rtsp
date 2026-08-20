@@ -103,7 +103,7 @@ static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, G
 
 GstCaps *Image2rtsp::gst_caps_new_from_image(const sensor_msgs::msg::Image::SharedPtr &msg){
     // http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/section-types-definitions.html
-    static const std::map<std::string, std::string> known_formats = {
+    static const std::map<std::string, std::string> raw_formats = {
         {sensor_msgs::image_encodings::RGB8, "RGB"},
         {sensor_msgs::image_encodings::RGB16, "RGB16"},
         {sensor_msgs::image_encodings::RGBA8, "RGBA"},
@@ -116,13 +116,33 @@ GstCaps *Image2rtsp::gst_caps_new_from_image(const sensor_msgs::msg::Image::Shar
         {sensor_msgs::image_encodings::MONO16, "GRAY16_LE"},
         {sensor_msgs::image_encodings::YUV422, "YUY2"},
     };
+    static const std::map<std::string, std::string> bayer_formats = {
+        {sensor_msgs::image_encodings::BAYER_RGGB8, "rggb"},
+        {sensor_msgs::image_encodings::BAYER_BGGR8, "bggr"},
+        {sensor_msgs::image_encodings::BAYER_GBRG8, "gbrg"},
+        {sensor_msgs::image_encodings::BAYER_GRBG8, "grbg"},
+        {sensor_msgs::image_encodings::BAYER_RGGB16, "rggb16le"},
+        {sensor_msgs::image_encodings::BAYER_BGGR16, "bggr16le"},
+        {sensor_msgs::image_encodings::BAYER_GBRG16, "gbrg16le"},
+        {sensor_msgs::image_encodings::BAYER_GRBG16, "grbg16le"},
+    };
     if (msg->is_bigendian){
         RCLCPP_ERROR(this->get_logger(), "GST: big endian image format is not supported");
         return nullptr;
     }
 
-    auto format = known_formats.find(msg->encoding);
-    if (format == known_formats.end()){
+    auto bayer_format = bayer_formats.find(msg->encoding);
+    if (bayer_format != bayer_formats.end()){
+        return gst_caps_new_simple("video/x-bayer",
+                                   "format", G_TYPE_STRING, bayer_format->second.c_str(),
+                                   "width", G_TYPE_INT, msg->width,
+                                   "height", G_TYPE_INT, msg->height,
+                                   "framerate", GST_TYPE_FRACTION, stoi(framerate), 1,
+                                   nullptr);
+    }
+
+    auto format = raw_formats.find(msg->encoding);
+    if (format == raw_formats.end()){
         RCLCPP_ERROR(this->get_logger(), "GST: image format '%s' unknown", msg->encoding.c_str());
         return nullptr;
     }
@@ -168,12 +188,16 @@ static gboolean session_cleanup(Image2rtsp *node, rclcpp::Logger logger, gboolea
 }
 
 void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
+    if (!pipeline_initialized){
+        initialize_pipeline(sensor_msgs::image_encodings::isBayer(msg->encoding));
+    }
+
     GstBuffer *buf;
     GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
-    char *gst_type, *gst_format = (char *)"";
     if (appsrc != NULL){
-        // Set caps from message
         caps = gst_caps_new_from_image(msg);
+        if (caps == nullptr)
+            return;
         gst_app_src_set_caps(appsrc, caps);
         buf = gst_buffer_new_allocate(nullptr, msg->data.size(), nullptr);
         gst_buffer_fill(buf, 0, msg->data.data(), msg->data.size());

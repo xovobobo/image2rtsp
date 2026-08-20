@@ -55,10 +55,19 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     video_mainloop_start();
     rtsp_server = rtsp_server_create(port, local_only);
     appsrc = NULL;
+    pipeline_initialized = false;
 
-    // Setup the pipeline
     pipeline_tail = "key-int-max=30 ! video/x-h264, profile=baseline ! rtph264pay name=pay0 pt=96 )";
-    std::string pipeline_head, pipeline;
+
+    if (camera || compressed_image || override_pipeline){
+        initialize_pipeline(false);
+    }
+}
+
+void Image2rtsp::initialize_pipeline(bool bayer){
+    if (pipeline_initialized){
+        return;
+    }
 
     if (!override_pipeline)
     {
@@ -69,7 +78,8 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
             pipeline_head += compressed_image ? " ! jpegdec" : "";
         }
 
-        pipeline = pipeline_head + " ! videoconvert ! videoscale ! " + caps_1 + framerate + caps_2 +
+        std::string convert = bayer ? "bayer2rgb ! videoconvert" : "videoconvert";
+        pipeline = pipeline_head + " ! " + convert + " ! videoscale ! " + caps_1 + framerate + caps_2 +
                 " ! x264enc tune=zerolatency bitrate=" + bitrate + " " + pipeline_tail;
     }
     else
@@ -78,6 +88,7 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     }
 
     rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? NULL : (GstElement **)&(appsrc));
+    pipeline_initialized = true;
 
     RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());
     RCLCPP_INFO(this->get_logger(), "Pipeline: %s", pipeline.c_str());

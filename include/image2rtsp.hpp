@@ -32,8 +32,10 @@ private:
     bool local_only;
     bool camera;
     bool override_pipeline;
+    bool pipeline_initialized;
     GstAppSrc *appsrc;
 
+    void initialize_pipeline(bool bayer);
     void video_mainloop_start();
     void rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc);
     void topic_callback(const sensor_msgs::msg::Image::SharedPtr msg);
