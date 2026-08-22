@@ -14,6 +14,8 @@ class Image2rtsp : public rclcpp::Node{
 public:
     Image2rtsp();
     GstRTSPServer *rtsp_server;
+    void rtsp_media_prepared(GstRTSPMedia *media);
+    void rtsp_media_unprepared();
 
 private:
     string source;
@@ -33,11 +35,12 @@ private:
     bool camera;
     bool override_pipeline;
     bool pipeline_initialized;
+    bool stream_active;
     GstAppSrc *appsrc;
 
     void initialize_pipeline(bool bayer);
     void video_mainloop_start();
-    void rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc);
+    void rtsp_server_add_url(const char *url, const char *sPipeline, Image2rtsp *node);
     void topic_callback(const sensor_msgs::msg::Image::SharedPtr msg);
     void topic_compressed_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg);
     GstRTSPServer *rtsp_server_create(const string &port, const bool local_only);
@@ -47,7 +50,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_compressed_;
 };
 
-static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, GstElement **appsrc);
+static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, Image2rtsp *node);
 static void *mainloop(void *arg);
 static gboolean session_cleanup(Image2rtsp *node, rclcpp::Logger logger, gboolean ignored);
 

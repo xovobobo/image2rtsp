@@ -55,6 +55,7 @@ Image2rtsp::Image2rtsp() : Node("image2rtsp"){
     video_mainloop_start();
     rtsp_server = rtsp_server_create(port, local_only);
     appsrc = NULL;
+    stream_active = false;
     pipeline_initialized = false;
 
     pipeline_tail = "key-int-max=30 ! video/x-h264, profile=baseline ! rtph264pay name=pay0 pt=96 )";
@@ -87,7 +88,7 @@ void Image2rtsp::initialize_pipeline(bool bayer){
         pipeline = custom_pipeline;
     }
 
-    rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? NULL : (GstElement **)&(appsrc));
+    rtsp_server_add_url(mountpoint.c_str(), pipeline.c_str(), camera ? NULL : this);
     pipeline_initialized = true;
 
     RCLCPP_INFO(this->get_logger(), "Stream available at rtsp://%s:%s%s", gst_rtsp_server_get_address(rtsp_server), port.c_str(), mountpoint.c_str());

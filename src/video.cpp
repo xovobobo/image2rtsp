@@ -8,6 +8,15 @@
 
 using namespace std;
 
+static void on_rtsp_media_prepared(GstRTSPMedia *media, Image2rtsp *node){
+    node->rtsp_media_prepared(media);
+}
+
+static void on_rtsp_media_unprepared(GstRTSPMedia *media, Image2rtsp *node){
+    (void)media;
+    node->rtsp_media_unprepared();
+}
+
 static void *mainloop(void *arg){
     GMainLoop *loop = g_main_loop_new(NULL, FALSE);
     g_main_loop_run(loop);
@@ -38,7 +47,7 @@ GstRTSPServer *Image2rtsp::rtsp_server_create(const std::string &port, const boo
     return server;
 }
 
-void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, GstElement **appsrc){
+void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Image2rtsp *node){
     GstRTSPMountPoints *mounts;
     GstRTSPMediaFactory *factory;
 
@@ -55,7 +64,7 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Gst
 
     /* notify when our media is ready, This is called whenever someone asks for
      * the media and a new pipeline is created */
-    g_signal_connect(factory, "media-configure", (GCallback)media_configure, appsrc);
+    g_signal_connect(factory, "media-configure", (GCallback)media_configure, node);
 
     gst_rtsp_media_factory_set_shared(factory, TRUE);
 
@@ -66,16 +75,26 @@ void Image2rtsp::rtsp_server_add_url(const char *url, const char *sPipeline, Gst
     g_object_unref(mounts);
 }
 
-static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, GstElement **appsrc){
-    if(appsrc){
-        GstElement *pipeline = gst_rtsp_media_get_element(media);
+void Image2rtsp::rtsp_media_prepared(GstRTSPMedia *media){
+    GstElement *pipeline = gst_rtsp_media_get_element(media);
 
-        *appsrc = gst_bin_get_by_name(GST_BIN(pipeline), "imagesrc");
+    appsrc = GST_APP_SRC(gst_bin_get_by_name(GST_BIN(pipeline), "imagesrc"));
+    gst_util_set_object_arg(G_OBJECT(appsrc), "format", "time");
+    stream_active = true;
 
-        /* this instructs appsrc that we will be dealing with timed buffer */
-        gst_util_set_object_arg(G_OBJECT(*appsrc), "format", "time");
+    gst_object_unref(pipeline);
+}
 
-        gst_object_unref(pipeline);
+void Image2rtsp::rtsp_media_unprepared(){
+    stream_active = false;
+}
+
+static void media_configure(GstRTSPMediaFactory *factory, GstRTSPMedia *media, Image2rtsp *node){
+    (void)factory;
+    if(node){
+        node->rtsp_media_prepared(media);
+        g_signal_connect(media, "prepared", G_CALLBACK(on_rtsp_media_prepared), node);
+        g_signal_connect(media, "unprepared", G_CALLBACK(on_rtsp_media_unprepared), node);
     }else{
         guint i, n_streams;
         n_streams = gst_rtsp_media_n_streams(media);
@@ -194,7 +213,7 @@ void Image2rtsp::topic_callback(const sensor_msgs::msg::Image::SharedPtr msg){
 
     GstBuffer *buf;
     GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
-    if (appsrc != NULL){
+    if (appsrc != NULL && stream_active){
         caps = gst_caps_new_from_image(msg);
         if (caps == nullptr)
             return;
@@ -210,7 +229,7 @@ void Image2rtsp::topic_compressed_callback(const sensor_msgs::msg::CompressedIma
     GstBuffer *buf;
     GstCaps *caps; // image properties. see return of Image2rtsp::gst_caps_new_from_image
     char *gst_type, *gst_format = (char *)"";
-    if (appsrc != NULL){
+    if (appsrc != NULL && stream_active){
         // Set caps from message
         caps = gst_caps_new_from_compressed_image(msg);
         if (caps == nullptr)
